@@ -1,0 +1,74 @@
+# This YAML file describes your package. Stack will automatically generate a
+# Cabal file when you run `stack build`. See the hpack website for help with
+# this file: <https://github.com/sol/hpack>.
+name:                starter
+version:             0.1.0.0
+github:              "Martinsos/haskell-stack-starter"
+license:             MIT
+author:              "Martin Sosic"
+maintainer:          "sosic.martin@gmail.com"
+copyright:           "2019 Martin Sosic"
+
+default-extensions: OverloadedStrings
+
+extra-source-files:
+  - README.md
+
+# Metadata used when publishing your package
+# synopsis:            Short description of your package
+# category:            Web
+
+# To avoid duplicated efforts in documentation and dealing with the
+# complications of embedding Haddock markup inside cabal files, it is
+# common to point users to the README.md file.
+description:         Please see the README on GitHub at <https://github.com/Martinsos/haskell-stack-starter#readme>
+
+dependencies:
+  - base >= 4.7 && < 5
+
+ghc-options:
+  - -Wall
+  - -Werror
+
+library:
+  source-dirs: src
+  dependencies: []
+
+executables:
+  starter-exe:
+    main:                Main.hs
+    source-dirs:         app
+    ghc-options:
+      - -threaded
+      - -rtsopts
+      - -with-rtsopts=-N
+    dependencies:
+      - starter
+
+benchmarks:
+  starter-benchmarks:
+    main:                Main.hs
+    source-dirs:         benchmark
+    ghc-options:
+      - -threaded
+      - -rtsopts
+      - -with-rtsopts=-N
+    dependencies:
+      - starter
+      - criterion
+
+tests:
+  starter-test:
+    main:                TastyDiscoverDriver.hs
+    source-dirs:         test
+    ghc-options:
+      - -threaded
+      - -rtsopts
+      - -with-rtsopts=-N
+    dependencies:
+      - starter
+      - tasty
+      - tasty-hspec
+      - tasty-quickcheck
+      - tasty-discover
+      - QuickCheck
