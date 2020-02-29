@@ -5,7 +5,7 @@ import Test.Tasty.Hspec
 import Lib
 
 
-spec_sayHello :: Spec
-spec_sayHello = do
-    it "Returns correct message" $ do
-        sayHello `shouldBe` "Hello world!"
+spec_scanTokens :: Spec
+spec_scanTokens = do
+    it "Breaks string by lines and words" $ do
+        scanTokens "First line\nSecond line" `shouldBe` ["First", "line", "Second", "line"]
