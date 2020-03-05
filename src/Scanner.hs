@@ -42,10 +42,13 @@ scanToken source (line, col)
   -- Skip white spaces.
   | (head source) `elem` [' ', '\r', '\t'] = scanToken (tail source) (line, col + 1)
   -- Skip new line.
-  | (head source) == '\n' = scanToken (tail source) (line + 1, 0)
+  | head source == '\n' = scanToken (tail source) (line + 1, 0)
   -- Try to parse simple lexeme.
   | Just (lexeme, token) <- find ((`isPrefixOf` source) . fst) simpleLexemeToToken =
       (Right (PT.ParsedToken token line), drop (length lexeme) source, (line, col + (length lexeme)))
+  -- Try to parse string.
+  | head source == '"' = scanStringLiteral "" (tail source) (line, col + 1)
+  -- Error
   | otherwise = (Left (ParseError ("Unexpected character '" ++ [head source] ++ "'.") line), (tail source), (line, col + 1))
   where
     -- NOTE: Order is important, longer ones should be first!
@@ -69,3 +72,16 @@ scanToken source (line, col)
                           , ("*", T.Star)
                           , ("/", T.Slash)
                           ]
+
+-- | Scans string literal, while assuming that initial " was already scanned.
+scanStringLiteral :: String -> Source -> Location -> (Either ParseError ParsedToken, Source, Location)
+scanStringLiteral _ "" location =
+  (Left (ParseError "Unterminated string, expected \"." (fst location)), "", location)
+scanStringLiteral scannedReversed ('\"' : source') (line, col) =
+  let value = reverse scannedReversed
+      lexeme = '"' : value ++ "\""
+  in (Right (PT.ParsedToken (T.String lexeme value) line), source', (line, col + 1))
+scanStringLiteral scannedReversed (c : source') (line, col) =
+  let location' = if c == '\n' then (line + 1, col) else (line, col + 1)
+  in scanStringLiteral (c : scannedReversed) source' location'
+
