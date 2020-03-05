@@ -3,6 +3,7 @@ module Scanner
   , ParseError(..)
   ) where
 
+import Data.List (find, isPrefixOf)
 import ParsedToken (ParsedToken)
 import qualified ParsedToken as PT
 import qualified Token as T
@@ -33,18 +34,38 @@ scanTokens' source location =
 -- Output is parsed token or error, remaining source after parsing and location of first character in the remaining source.
 scanToken :: Source -> Location -> (Either ParseError ParsedToken, Source, Location)
 scanToken "" location = (Right (PT.ParsedToken T.Eof (fst location)), "", location)
-scanToken (c : source') (line, col)
-  | Just token <- lookup c singleCharLexemeToToken = (Right (PT.ParsedToken token line), source', (line, col + 1))
-  | otherwise = (Left (ParseError ("Unexpected character '" ++ [c] ++ "'.") line), source', (line, col + 1))
+scanToken source (line, col)
+  -- Skip line comment.
+  | "//" `isPrefixOf` source =
+      let source' = drop 1 $ dropWhile (/= '\n') source
+      in scanToken source' (line + 1, 0)
+  -- Skip white spaces.
+  | (head source) `elem` [' ', '\r', '\t'] = scanToken (tail source) (line, col + 1)
+  -- Skip new line.
+  | (head source) == '\n' = scanToken (tail source) (line + 1, 0)
+  -- Try to parse simple lexeme.
+  | Just (lexeme, token) <- find ((`isPrefixOf` source) . fst) simpleLexemeToToken =
+      (Right (PT.ParsedToken token line), drop (length lexeme) source, (line, col + (length lexeme)))
+  | otherwise = (Left (ParseError ("Unexpected character '" ++ [head source] ++ "'.") line), (tail source), (line, col + 1))
   where
-    singleCharLexemeToToken = [ ('(', T.LeftParen)
-                              , (')', T.RightParen)
-                              , ('{', T.LeftBrace)
-                              , ('}', T.RightBrace)
-                              , (',', T.Comma)
-                              , ('.', T.Dot)
-                              , ('-', T.Minus)
-                              , ('+', T.Plus)
-                              , (';', T.Semicolon)
-                              , ('*', T.Star)
-                              ]
+    -- NOTE: Order is important, longer ones should be first!
+    simpleLexemeToToken = [ ("!=", T.BangEqual)
+                          , ("==", T.EqualEqual)
+                          , ("<=", T.LessEqual)
+                          , (">=", T.GreaterEqual)
+                          , ("!", T.Bang)
+                          , ("=", T.Equal)
+                          , ("<", T.Less)
+                          , (">", T.Greater)
+                          , ("(", T.LeftParen)
+                          , (")", T.RightParen)
+                          , ("{", T.LeftBrace)
+                          , ("}", T.RightBrace)
+                          , (",", T.Comma)
+                          , (".", T.Dot)
+                          , ("-", T.Minus)
+                          , ("+", T.Plus)
+                          , (";", T.Semicolon)
+                          , ("*", T.Star)
+                          , ("/", T.Slash)
+                          ]
