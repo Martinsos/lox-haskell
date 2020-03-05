@@ -1,25 +1,16 @@
 module Lib
     ( run
-    -- Exported for the purpose of tests:
-    , scanTokens
     ) where
 
 import System.IO (hPutStrLn, stderr)
+import qualified Scanner as S
+
 
 run :: String -> IO ()
 run source = do
-  let tokens = scanTokens source
-  sequence_ $ map putStrLn tokens
+  let (parseErrors, parsedTokens) = S.scanTokens source
+  sequence_ $ map (putStrLn . show) parsedTokens
+  sequence_ $ map (reportParseError) parseErrors
 
-scanTokens :: String -> [String]
-scanTokens source = concat $ map words $ lines $ source
-
-error :: Int -> String -> IO ()
-error line message = report line "" message
-
--- NOTE: In book, he also sets global hadError flag to true here, and uses that to check if error
---   happened after being done with execution of program.
---   I could achieve smth like that right now by introducing Lox (or App) monad instead of IO, but I will leave that
---   for later to see if there is a simpler option.
-report :: Int -> String -> String -> IO ()
-report line whereMessage message = hPutStrLn stderr $ "[line " ++ (show line) ++ "] Error" ++ whereMessage ++ ": " ++ message
+reportParseError :: S.ParseError -> IO ()
+reportParseError (S.ParseError msg line) = hPutStrLn stderr $ "[line " ++ (show line) ++ "] Error: " ++ msg

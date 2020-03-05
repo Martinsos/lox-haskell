@@ -2,6 +2,12 @@ module Token
   ( Token(..)
   ) where
 
+
+type Lexeme = String
+type IdentifierLiteral = String
+type StringLiteral = String
+type NumberLiteral = Double
+
 -- NOTE: In book, this type is called TokenType.
 --   I put values of literals directly into it, so I named it Token.
 data Token =
@@ -14,7 +20,7 @@ data Token =
   | Less | LessEqual
 
   -- Literals.
-  | Identfier String | String String | Number Double
+  | Identifier Lexeme IdentifierLiteral | String Lexeme StringLiteral | Number Lexeme NumberLiteral
 
   -- Keywords.
   | And | Class | Else | False | Fun | For | If | Nil | Or
