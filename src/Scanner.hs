@@ -32,24 +32,27 @@ scanTokens' source location =
 
 -- | Input is source and location of first character in source.
 -- Output is parsed token or error, remaining source after parsing and location of first character in the remaining source.
+-- TODO: Can I refactor this method so that I extract almost all parsing logic for specific type of token into functions, so I don't need any comments in it?
 scanToken :: Source -> Location -> (Either ParseError ParsedToken, Source, Location)
 scanToken "" location = (Right (PT.ParsedToken T.Eof (fst location)), "", location)
-scanToken source (line, col)
+scanToken source@(c : _) (line, col)
   -- Skip line comment.
   | "//" `isPrefixOf` source =
       let source' = drop 1 $ dropWhile (/= '\n') source
       in scanToken source' (line + 1, 0)
-  -- Skip white spaces.
-  | (head source) `elem` [' ', '\r', '\t'] = scanToken (tail source) (line, col + 1)
+  -- Skip white space.
+  | c `elem` [' ', '\r', '\t'] = scanToken (tail source) (line, col + 1)
   -- Skip new line.
-  | head source == '\n' = scanToken (tail source) (line + 1, 0)
+  | c == '\n' = scanToken (tail source) (line + 1, 0)
+  -- Try to parse string literal.
+  | c == '"' = scanStringLiteral "" (tail source) (line, col + 1)
+  -- Trye to parse number literal.
+  | isDigit c = scanNumberLiteral source (line, col)
   -- Try to parse simple lexeme.
   | Just (lexeme, token) <- find ((`isPrefixOf` source) . fst) simpleLexemeToToken =
       (Right (PT.ParsedToken token line), drop (length lexeme) source, (line, col + (length lexeme)))
-  -- Try to parse string.
-  | head source == '"' = scanStringLiteral "" (tail source) (line, col + 1)
   -- Error
-  | otherwise = (Left (ParseError ("Unexpected character '" ++ [head source] ++ "'.") line), (tail source), (line, col + 1))
+  | otherwise = (Left (ParseError ("Unexpected character '" ++ [c] ++ "'.") line), (tail source), (line, col + 1))
   where
     -- NOTE: Order is important, longer ones should be first!
     simpleLexemeToToken = [ ("!=", T.BangEqual)
@@ -73,6 +76,9 @@ scanToken source (line, col)
                           , ("/", T.Slash)
                           ]
 
+isDigit :: Char -> Bool
+isDigit c = c >= '0' && c <= '9'
+
 -- | Scans string literal, while assuming that initial " was already scanned.
 scanStringLiteral :: String -> Source -> Location -> (Either ParseError ParsedToken, Source, Location)
 scanStringLiteral _ "" location =
@@ -85,3 +91,13 @@ scanStringLiteral scannedReversed (c : source') (line, col) =
   let location' = if c == '\n' then (line + 1, col) else (line, col + 1)
   in scanStringLiteral (c : scannedReversed) source' location'
 
+scanNumberLiteral :: Source -> Location -> (Either ParseError ParsedToken, Source, Location)
+scanNumberLiteral source (line, col) =
+  let (wholeNumberPart, source') = (takeWhile isDigit source, dropWhile isDigit source)
+      (decimalNumberPart, source'') = if (length source' >= 2 && head source' == '.' && isDigit (source' !! 1))
+                                      then ('.' : (takeWhile isDigit (drop 1 source')), dropWhile isDigit (drop 1 source'))
+                                      else ("", source')
+      lexeme = wholeNumberPart ++ decimalNumberPart
+  in if (null lexeme)
+     then (Left (ParseError "Failed to scan number literal." line), source, (line, col))
+     else (Right (PT.ParsedToken (T.Number lexeme (read lexeme)) line), source'', (line, col + length lexeme))

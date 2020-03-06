@@ -4,3 +4,4 @@
 ("this is a string") "this is
 multiline string"
 =""= // Empty string
+1234 -56 12.34 12.a 5 .1 // Number literals.
