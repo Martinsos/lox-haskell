@@ -32,28 +32,38 @@ scanTokens' source location =
 
 -- | Input is source and location of first character in source.
 -- Output is parsed token or error, remaining source after parsing and location of first character in the remaining source.
--- TODO: Can I refactor this method so that I extract almost all parsing logic for specific type of token into functions, so I don't need any comments in it?
 scanToken :: Source -> Location -> (Either ParseError ParsedToken, Source, Location)
 scanToken "" location = (Right (PT.ParsedToken T.Eof (fst location)), "", location)
-scanToken source@(c : _) (line, col)
-  -- Skip line comment.
-  | "//" `isPrefixOf` source =
-      let source' = drop 1 $ dropWhile (/= '\n') source
-      in scanToken source' (line + 1, 0)
-  -- Skip white space.
-  | c `elem` [' ', '\r', '\t'] = scanToken (tail source) (line, col + 1)
-  -- Skip new line.
-  | c == '\n' = scanToken (tail source) (line + 1, 0)
-  -- Try to parse string literal.
-  | c == '"' = scanStringLiteral "" (tail source) (line, col + 1)
-  -- Trye to parse number literal.
-  | isDigit c = scanNumberLiteral source (line, col)
-  -- Try to parse simple lexeme.
+scanToken source@(c : source') (line, col)
+  | isLineComment = skipLineComment
+  | isWhiteSpace = skipWhiteSpace
+  | isNewLine = skipNewLine
+  | isStringLiteral = scanStringLiteral
+  | isNumberLiteral = scanNumberLiteral 
+  -- If simple lexeme, scan it.
   | Just (lexeme, token) <- find ((`isPrefixOf` source) . fst) simpleLexemeToToken =
       (Right (PT.ParsedToken token line), drop (length lexeme) source, (line, col + (length lexeme)))
-  -- Error
-  | otherwise = (Left (ParseError ("Unexpected character '" ++ [c] ++ "'.") line), (tail source), (line, col + 1))
+  | otherwise = unexpectedCharacterError
   where
+    isLineComment = "//" `isPrefixOf` source
+    skipLineComment = let sourceWithoutComment = drop 1 $ dropWhile (/= '\n') source
+                      in scanToken sourceWithoutComment (line + 1, 0)
+
+    isWhiteSpace = c `elem` [' ', '\r', '\t']
+    skipWhiteSpace = scanToken source' (line, col + 1)
+
+    isNewLine = c == '\n'
+    skipNewLine = scanToken source' (line + 1, 0)
+
+    isStringLiteral = c == '"'
+    scanStringLiteral = scanStringLiteral' "" source' (line, col + 1)
+
+    isNumberLiteral = isDigit c
+    scanNumberLiteral = scanNumberLiteral' source (line, col)
+
+    unexpectedCharacterError =
+      (Left (ParseError ("Unexpected character '" ++ [c] ++ "'.") line), (tail source), (line, col + 1))
+
     -- NOTE: Order is important, longer ones should be first!
     simpleLexemeToToken = [ ("!=", T.BangEqual)
                           , ("==", T.EqualEqual)
@@ -80,19 +90,19 @@ isDigit :: Char -> Bool
 isDigit c = c >= '0' && c <= '9'
 
 -- | Scans string literal, while assuming that initial " was already scanned.
-scanStringLiteral :: String -> Source -> Location -> (Either ParseError ParsedToken, Source, Location)
-scanStringLiteral _ "" location =
+scanStringLiteral' :: String -> Source -> Location -> (Either ParseError ParsedToken, Source, Location)
+scanStringLiteral' _ "" location =
   (Left (ParseError "Unterminated string, expected \"." (fst location)), "", location)
-scanStringLiteral scannedReversed ('\"' : source') (line, col) =
+scanStringLiteral' scannedReversed ('\"' : source') (line, col) =
   let value = reverse scannedReversed
       lexeme = '"' : value ++ "\""
   in (Right (PT.ParsedToken (T.String lexeme value) line), source', (line, col + 1))
-scanStringLiteral scannedReversed (c : source') (line, col) =
+scanStringLiteral' scannedReversed (c : source') (line, col) =
   let location' = if c == '\n' then (line + 1, col) else (line, col + 1)
-  in scanStringLiteral (c : scannedReversed) source' location'
+  in scanStringLiteral' (c : scannedReversed) source' location'
 
-scanNumberLiteral :: Source -> Location -> (Either ParseError ParsedToken, Source, Location)
-scanNumberLiteral source (line, col) =
+scanNumberLiteral' :: Source -> Location -> (Either ParseError ParsedToken, Source, Location)
+scanNumberLiteral' source (line, col) =
   let (wholeNumberPart, source') = (takeWhile isDigit source, dropWhile isDigit source)
       (decimalNumberPart, source'') = if (length source' >= 2 && head source' == '.' && isDigit (source' !! 1))
                                       then ('.' : (takeWhile isDigit (drop 1 source')), dropWhile isDigit (drop 1 source'))
