@@ -20,7 +20,7 @@ data Token =
   | Less | LessEqual
 
   -- Literals.
-  | Identifier Lexeme IdentifierLiteral | String Lexeme StringLiteral | Number Lexeme NumberLiteral
+  | Identifier IdentifierLiteral | String Lexeme StringLiteral | Number Lexeme NumberLiteral
 
   -- Keywords.
   | And | Class | Else | False | Fun | For | If | Nil | Or

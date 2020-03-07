@@ -34,12 +34,13 @@ scanTokens' source location =
 -- Output is parsed token or error, remaining source after parsing and location of first character in the remaining source.
 scanToken :: Source -> Location -> (Either ParseError ParsedToken, Source, Location)
 scanToken "" location = (Right (PT.ParsedToken T.Eof (fst location)), "", location)
-scanToken source@(c : source') (line, col)
+scanToken source@(c : source') location@(line, col)
   | isLineComment = skipLineComment
   | isWhiteSpace = skipWhiteSpace
   | isNewLine = skipNewLine
   | isStringLiteral = scanStringLiteral
   | isNumberLiteral = scanNumberLiteral 
+  | isIdentifierOrKeyword = scanIdentifierOrKeyword
   -- If simple lexeme, scan it.
   | Just (lexeme, token) <- find ((`isPrefixOf` source) . fst) simpleLexemeToToken =
       (Right (PT.ParsedToken token line), drop (length lexeme) source, (line, col + (length lexeme)))
@@ -59,7 +60,10 @@ scanToken source@(c : source') (line, col)
     scanStringLiteral = scanStringLiteral' "" source' (line, col + 1)
 
     isNumberLiteral = isDigit c
-    scanNumberLiteral = scanNumberLiteral' source (line, col)
+    scanNumberLiteral = scanNumberLiteral' source location
+
+    isIdentifierOrKeyword = isAlpha c
+    scanIdentifierOrKeyword = scanIdentifierOrKeyword' source location
 
     unexpectedCharacterError =
       (Left (ParseError ("Unexpected character '" ++ [c] ++ "'.") line), (tail source), (line, col + 1))
@@ -86,6 +90,12 @@ scanToken source@(c : source') (line, col)
                           , ("/", T.Slash)
                           ]
 
+isAlpha :: Char -> Bool
+isAlpha c = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c == '_')
+
+isAlphaNumeric :: Char -> Bool
+isAlphaNumeric c = isAlpha c || isDigit c
+
 isDigit :: Char -> Bool
 isDigit c = c >= '0' && c <= '9'
 
@@ -111,3 +121,32 @@ scanNumberLiteral' source (line, col) =
   in if (null lexeme)
      then (Left (ParseError "Failed to scan number literal." line), source, (line, col))
      else (Right (PT.ParsedToken (T.Number lexeme (read lexeme)) line), source'', (line, col + length lexeme))
+
+-- Scans identifier and returns either Identifier token or, if it is a keyword, appropriate keyword token.
+scanIdentifierOrKeyword' :: Source -> Location -> (Either ParseError ParsedToken, Source, Location)
+scanIdentifierOrKeyword' source (line, col) =
+  let (lexeme, source') = (takeWhile isAlphaNumeric source, dropWhile isAlphaNumeric source)
+      token = case lookup lexeme keywordLexemeToToken of
+                Just keywordToken -> keywordToken
+                Nothing -> T.Identifier lexeme
+  in if (not $ isAlpha $ head source)
+     then (Left (ParseError "Failed to scan identifier." line), source, (line, col))
+     else (Right (PT.ParsedToken token line), source', (line, col + length lexeme))
+  where
+    keywordLexemeToToken = [ ("and", T.And)
+                           , ("class", T.Class)
+                           , ("else", T.Else)
+                           , ("false", T.False)
+                           , ("for", T.For)
+                           , ("fun", T.Fun)
+                           , ("if", T.If)
+                           , ("nil", T.Nil)
+                           , ("or", T.Or)
+                           , ("print", T.Print)
+                           , ("return", T.Return)
+                           , ("super", T.Super)
+                           , ("this", T.This)
+                           , ("true", T.True)
+                           , ("var", T.Var)
+                           , ("while", T.While)
+                           ]
