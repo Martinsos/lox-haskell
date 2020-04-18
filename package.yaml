@@ -31,7 +31,8 @@ ghc-options:
 
 library:
   source-dirs: src
-  dependencies: []
+  dependencies:
+    - mtl
 
 executables:
   hlox:
