@@ -3,29 +3,51 @@ module Parser
     , runParser
     ) where
 
-import Data.Maybe (listToMaybe)
-import Control.Monad.State.Lazy (State, state, runState)
+import Utils (safeHead)
+import Control.Monad.Except (ExceptT, throwError, runExceptT)
+import Control.Monad.State.Lazy (State, runState, gets, modify)
 import qualified ScannedToken as ST
 import qualified Token as T
 import qualified AST
 
 
-type ParserState = [ST.ScannedToken]
-type Parser a = State ParserState a
-
--- TODO: Add error handling.
--- type Parser a = ExceptT ParserError (State ParserState) a
--- I will need to modify peekToken and popToken so that they use `lift`.
--- I will be able to use throwError and catchError from MonadError.
+type Parser a = ExceptT ParseError (State ParserState) a
+data ParserState = ParserState
+    { _tokens :: [ST.ScannedToken]
+    , _errors :: [ParseError]
+    }
+data ParseError = ParseError String Position deriving (Show)
+data Position = LineNumber Int | Eof deriving (Show)
 
 peekToken :: Parser (Maybe ST.ScannedToken)
-peekToken = state $ \ts -> (listToMaybe ts, ts)
+peekToken = getTokens >>= return . safeHead
+
 popToken :: Parser (Maybe ST.ScannedToken)
-popToken = state $ \ts -> (listToMaybe ts, tail ts)
+popToken = do
+    tokens <- getTokens
+    setTokens (tail tokens)
+    return $ safeHead tokens
+
+getTokens :: Parser [ST.ScannedToken]
+getTokens = gets _tokens
+
+setTokens :: [ST.ScannedToken] -> Parser ()
+setTokens ts = modify $ \parserState -> parserState { _tokens = ts }
+
+logError :: ParseError -> Parser ()
+logError e = modify $ \parserState@(ParserState { _errors = errors }) -> parserState { _errors = e:errors }
+
+logAndThrowError :: ParseError -> Parser a
+logAndThrowError e = logError e >> throwError e
+
 
 -- | Runs given parser on provided tokens and returns parsed expression and remaining tokens.
-runParser :: Parser a -> [ST.ScannedToken] -> (a, [ST.ScannedToken])
-runParser parser scannedTokens = runState parser scannedTokens
+runParser :: Parser a -> [ST.ScannedToken] -> (Maybe a, [ParseError], [ST.ScannedToken])
+runParser parser scannedTokens =
+    let (resultOrError, parserState) = runState (runExceptT parser) initialParserState
+        maybeResult = either (const Nothing) (Just . id) resultOrError
+    in (maybeResult, _errors parserState, _tokens parserState)
+  where initialParserState = ParserState { _tokens = scannedTokens, _errors = [] }
 
 
 expression :: Parser AST.Expr
@@ -80,9 +102,9 @@ primary = do
                 maybeRightParen <- peekToken
                 case maybeRightParen of
                     Just rp | ST._token rp == T.RightParen -> popToken >> return subExpr
-                    _ -> error "Expected right parentheses after expression."
-            _ -> error "Expected primary expression"
-        Nothing -> error "Expected primary expression"
+                    _ -> logAndThrowError (ParseError "Expected ')'." Eof)
+            _ -> logAndThrowError (ParseError "Expected primary expression." (LineNumber $ ST._line t))
+        Nothing -> logAndThrowError (ParseError "Expected primary expression." Eof)
 
 -- | Given a sub expression and a list of operators, creates parser for
 -- following grammar production: <subExpr> ( ( <op1> | ... | <opN> ) <subExpr> )*
