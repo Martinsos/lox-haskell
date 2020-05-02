@@ -88,3 +88,18 @@ makeBinaryOperationParser operators subExprParser = do
                 let lhe' = AST.BinaryOperatorExpr operator lhe rhe
                 tryParsingRhe lhe'
             Nothing -> return lhe
+
+
+-- | Pops tokens until it encounters end of the statement or start of the statement.
+synchronize :: Parser ST.ScannedToken ()
+synchronize = do
+    nextScannedToken <- peekToken
+    case nextScannedToken of
+        Just st -> case ST._token st of
+            T.Semicolon         -> popToken >> return ()
+            t | isStartOfStmt t -> return ()
+            _                   -> popToken >> synchronize
+        Nothing -> return ()
+  where
+    isStartOfStmt :: T.Token -> Bool
+    isStartOfStmt t = t `elem` [T.Class, T.Fun, T.Var, T.For, T.If, T.While, T.Print, T.Return]
