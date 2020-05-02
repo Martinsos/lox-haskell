@@ -6,7 +6,7 @@ import qualified ScannedToken as ST
 import qualified Token as T
 import qualified AST
 
-import Parser (Parser, ParseError(..), Position(..), peekToken, popToken, logAndThrowError)
+import TokenParser (Parser, ParseError(..), Position(..), peekToken, popToken, logAndThrowError)
 
 type ExprParser = Parser ST.ScannedToken AST.Expr
 
