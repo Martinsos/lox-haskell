@@ -1,8 +1,10 @@
 module Interpreter
-    ( eval
+    ( evalExpr
+    , RuntimeError(..)
     ) where
 
 import qualified AST
+import Control.Monad.Except (throwError)
 
 data Value = StringValue String
            | BooleanValue Bool
@@ -10,47 +12,49 @@ data Value = StringValue String
            | NilValue
     deriving (Eq)
 
-eval :: AST.Expr -> Value
-eval expr = case expr of
+instance Show Value where
+    show (StringValue v) = "\"" ++ v ++ "\""
+    show (BooleanValue v) = if v then "true" else "false"
+    show (NumberValue v) = show v
+    show NilValue = "nil"
+
+-- TODO: Next is sub-chapter 7.3: Runtime Errors.
+--   We want to report token at which runtime error happened. However, that is going to be hard,
+--   since I did not pass token information into AST! So I have no idea which token is which operator coming from.
+--   I will have to do some refactoring of AST in order to support this.
+
+type Result = Either RuntimeError Value
+
+data RuntimeError = RuntimeError { _errorMsg :: String }
+
+throwRuntimeError :: String -> Result
+throwRuntimeError errorMsg = throwError $ RuntimeError { _errorMsg = errorMsg }
+
+evalExpr:: AST.Expr -> Result
+evalExpr expr = case expr of
     AST.LiteralExpr literal -> evalLiteral literal
     AST.UnaryOperatorExpr op e -> evalUnaryOperation op e
     AST.BinaryOperatorExpr op lhe rhe -> evalBinaryOperation op lhe rhe
-    AST.GroupingExpr e -> eval e
+    AST.GroupingExpr e -> evalExpr e
 
-evalLiteral :: AST.Literal -> Value
-evalLiteral literal = case literal of
+evalLiteral :: AST.Literal -> Result
+evalLiteral literal = return $ case literal of
     AST.StringLiteral v -> StringValue v
     AST.BooleanLiteral v -> BooleanValue v
     AST.NumberLiteral v -> NumberValue v
     AST.NilLiteral -> NilValue
 
-evalUnaryOperation :: AST.UnaryOperator -> AST.Expr -> Value
-evalUnaryOperation operator operandExpr = case operator of
-    AST.UnaryMinus -> case operandValue of
-        NumberValue number -> NumberValue (-number)
-        _ -> error "Can't negate non-number."
-    AST.Not -> BooleanValue $ not $ isTruthy operandValue
-  where operandValue = eval operandExpr
+evalUnaryOperation :: AST.UnaryOperator -> AST.Expr -> Result
+evalUnaryOperation operator operandExpr = do
+    operandValue <- evalExpr operandExpr
+    case operator of
+        AST.UnaryMinus -> case operandValue of
+            NumberValue number -> return $ NumberValue (-number)
+            _ -> throwRuntimeError "Unary operator - expected number."
+        AST.Not -> return $ BooleanValue $ not $ isTruthy operandValue
 
-evalBinaryOperation :: AST.BinaryOperator -> AST.Expr -> AST.Expr -> Value
-evalBinaryOperation operator lhExpr rhExpr = case operator of
-    AST.Minus -> evalArithmeticOperation (-)
-    AST.Slash -> evalArithmeticOperation (/)
-    AST.Star -> evalArithmeticOperation (*)
-
-    AST.Plus -> case (lhValue, rhValue) of
-        (NumberValue lv, NumberValue rv) -> NumberValue $ lv + rv
-        (StringValue lv, StringValue rv) -> StringValue $ lv ++ rv
-        _ -> error "Expected numbers or strings!"
-
-    AST.Greater -> evalComparisonOperation (>)
-    AST.GreaterEqual -> evalComparisonOperation (>=)
-    AST.Less -> evalComparisonOperation (<)
-    AST.LessEqual -> evalComparisonOperation (<=)
-
-    AST.Equal -> BooleanValue $ lhValue == rhValue
-    AST.NotEqual -> BooleanValue $ lhValue /= rhValue
-  where
+evalBinaryOperation :: AST.BinaryOperator -> AST.Expr -> AST.Expr -> Result
+evalBinaryOperation operator lhExpr rhExpr = do
     -- NOTE: In book's Java implementation, there is clear order of evaluation:
     --   first left expression is evaluated, then the right one. Author says this is important,
     --   explicit part of implementation that should be part of language specification.
@@ -59,18 +63,36 @@ evalBinaryOperation operator lhExpr rhExpr = case operator of
     --   I wonder, should I use something like deepseq or seq or pseq to ensure the order?
     --   From what I read, pseq should be able to ensure order, but still I am not sure if that is the way.
     --   Does it make any sense to worry about this at all, since there is no IO involved?
-    (lhValue, rhValue) = (eval lhExpr, eval rhExpr)
+    a <- evalExpr lhExpr
+    b <- evalExpr rhExpr
 
-    evalArithmeticOperation :: (Double -> Double -> Double) -> Value
-    evalArithmeticOperation f = case (lhValue, rhValue) of
-        (NumberValue lv, NumberValue rv) -> NumberValue $ f lv rv
-        _ -> error "Expected numbers!"
+    case operator of
+        AST.Minus -> evalArithmeticOperation (-) a b
+        AST.Slash -> evalArithmeticOperation (/) a b
+        AST.Star -> evalArithmeticOperation (*) a b
 
+        AST.Plus -> case (a, b) of
+            (NumberValue na, NumberValue nb) -> return $ NumberValue $ na + nb
+            (StringValue sa, StringValue sb) -> return $ StringValue $ sa ++ sb
+            _ -> throwRuntimeError "Operator + expected two numbers or two strings."
 
-    evalComparisonOperation :: (Double -> Double -> Bool) -> Value
-    evalComparisonOperation f = case (lhValue, rhValue) of
-        (NumberValue lv, NumberValue rv) -> BooleanValue $ f lv rv
-        _ -> error "Expected numbers!"
+        AST.Greater -> evalComparisonOperation (>) a b
+        AST.GreaterEqual -> evalComparisonOperation (>=) a b
+        AST.Less -> evalComparisonOperation (<) a b
+        AST.LessEqual -> evalComparisonOperation (<=) a b
+
+        AST.Equal -> return $ BooleanValue $ a == b
+        AST.NotEqual -> return $ BooleanValue $ a /= b
+  where
+    evalArithmeticOperation :: (Double -> Double -> Double) -> Value -> Value -> Result
+    evalArithmeticOperation f a b = case (a, b) of
+        (NumberValue na, NumberValue nb) -> return $ NumberValue $ f na nb
+        _ -> throwRuntimeError "Binary arithmetic operator expected two numbers!"
+
+    evalComparisonOperation :: (Double -> Double -> Bool) -> Value -> Value -> Result
+    evalComparisonOperation f a b = case (a, b) of
+        (NumberValue na, NumberValue nb) -> return $ BooleanValue $ f na nb
+        _ -> throwRuntimeError "Binary comparison operator expected two numbers!"
 
 isTruthy :: Value -> Bool
 isTruthy (BooleanValue False) = False
