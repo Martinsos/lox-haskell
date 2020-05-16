@@ -4,11 +4,11 @@ module Parser.Expr
 
 import qualified ScannedToken as ST
 import qualified Token as T
-import qualified AST
-
 import TokenParser (Parser, ParseError(..), Position(..), peekToken, popToken, logAndThrowError)
+import qualified AST
+import qualified Parser.ASTContext as C
 
-type ExprParser = Parser ST.ScannedToken AST.Expr
+type ExprParser = Parser ST.ScannedToken (AST.Expr C.Context)
 
 expression :: ExprParser
 expression = equality
@@ -39,31 +39,33 @@ unary :: ExprParser
 unary = do
     maybeToken <- peekToken
     case maybeToken of
-        Just t | ST._token t == T.Bang  -> popToken >> parseUnary AST.Not
-               | ST._token t == T.Minus -> popToken >> parseUnary AST.UnaryMinus
+        Just t | ST._token t == T.Bang  -> popToken >> parseUnary t AST.Not
+               | ST._token t == T.Minus -> popToken >> parseUnary t AST.UnaryMinus
         _ -> primary
-  where parseUnary operator = do
+  where parseUnary token operator = do
             subExpr <- unary
-            return $ AST.UnaryOperatorExpr operator subExpr
+            return $ AST.UnaryOperatorExpr (C.withToken token) operator subExpr
 
 -- | NUMBER | STRING | "false" | "true" | "nil" | "(" expression ")"
 primary :: ExprParser
 primary = do
     maybeToken <- peekToken
     case maybeToken of
-        Just t -> case ST._token t of
-            T.False            -> popToken >> return (AST.LiteralExpr $ AST.BooleanLiteral False)
-            T.True             -> popToken >> return (AST.LiteralExpr $ AST.BooleanLiteral True)
-            T.Nil              -> popToken >> return (AST.LiteralExpr AST.NilLiteral)
-            (T.Number _ value) -> popToken >> return (AST.LiteralExpr $ AST.NumberLiteral value)
-            (T.String _ value) -> popToken >> return (AST.LiteralExpr $ AST.StringLiteral value)
-            T.LeftParen        -> popToken >> do
-                subExpr <- expression
-                maybeRightParen <- peekToken
-                case maybeRightParen of
-                    Just rp | ST._token rp == T.RightParen -> popToken >> return subExpr
-                    _ -> logAndThrowError (ParseError "Expected ')'." Eof)
-            _ -> logAndThrowError (ParseError "Expected primary expression." (LineNumber $ ST._line t))
+        Just t ->
+            let consumeTokenAsLiteral literal = popToken >> (return $ AST.LiteralExpr (C.withToken t) literal)
+            in case ST._token t of
+                   T.False            -> consumeTokenAsLiteral $ AST.BooleanLiteral False
+                   T.True             -> consumeTokenAsLiteral $ AST.BooleanLiteral True
+                   T.Nil              -> consumeTokenAsLiteral AST.NilLiteral
+                   (T.Number _ value) -> consumeTokenAsLiteral $ AST.NumberLiteral value
+                   (T.String _ value) -> consumeTokenAsLiteral $ AST.StringLiteral value
+                   T.LeftParen        -> popToken >> do
+                       subExpr <- expression
+                       maybeRightParen <- peekToken
+                       case maybeRightParen of
+                           Just rp | ST._token rp == T.RightParen -> popToken >> return subExpr
+                           _ -> logAndThrowError (ParseError "Expected ')'." Eof)
+                   _ -> logAndThrowError (ParseError "Expected primary expression." (LineNumber $ ST._line t))
         Nothing -> logAndThrowError (ParseError "Expected primary expression." Eof)
 
 -- | Given a sub expression and a list of operators, creates parser for
@@ -78,17 +80,18 @@ makeBinaryOperationParser operators subExprParser = do
   where
     -- | Given lhe expression, returns parser that tries to parse the following binary operator and rhe expression.
     -- If there is no binary operator following, it just returns the given lhe expression.
-    tryParsingRhe :: AST.Expr -> ExprParser
+    tryParsingRhe :: AST.Expr C.Context -> ExprParser
     tryParsingRhe lhe = do
         maybeToken <- peekToken
-        case maybeToken >>= \t -> lookup (ST._token t) operators of
-            Just operator -> do
-                _ <- popToken
-                rhe <- subExprParser
-                let lhe' = AST.BinaryOperatorExpr operator lhe rhe
-                tryParsingRhe lhe'
+        case maybeToken of
+            Just t -> case (lookup (ST._token t) operators) of
+                Just operator -> do
+                    _ <- popToken
+                    rhe <- subExprParser
+                    let lhe' = AST.BinaryOperatorExpr (C.withToken t) operator lhe rhe
+                    tryParsingRhe lhe'
+                Nothing -> return lhe
             Nothing -> return lhe
-
 
 -- | Pops tokens until it encounters end of the statement or start of the statement.
 synchronize :: Parser ST.ScannedToken ()

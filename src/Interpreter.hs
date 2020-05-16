@@ -4,7 +4,9 @@ module Interpreter
     ) where
 
 import qualified AST
+import qualified Parser.ASTContext as C
 import Control.Monad.Except (throwError)
+import qualified ScannedToken as ST
 
 data Value = StringValue String
            | BooleanValue Bool
@@ -18,43 +20,38 @@ instance Show Value where
     show (NumberValue v) = show v
     show NilValue = "nil"
 
--- TODO: Next is sub-chapter 7.3: Runtime Errors.
---   We want to report token at which runtime error happened. However, that is going to be hard,
---   since I did not pass token information into AST! So I have no idea which token is which operator coming from.
---   I will have to do some refactoring of AST in order to support this.
-
 type Result = Either RuntimeError Value
 
-data RuntimeError = RuntimeError { _errorMsg :: String }
+data RuntimeError = RuntimeError { _errorMsg :: String, _errorLine :: Maybe Int }
 
-throwRuntimeError :: String -> Result
-throwRuntimeError errorMsg = throwError $ RuntimeError { _errorMsg = errorMsg }
+throwRuntimeError :: String -> C.Context -> Result
+throwRuntimeError msg context = throwError $ RuntimeError { _errorMsg = msg, _errorLine = line }
+  where line = C._token context >>= return . ST._line
 
-evalExpr:: AST.Expr -> Result
-evalExpr expr = case expr of
-    AST.LiteralExpr literal -> evalLiteral literal
-    AST.UnaryOperatorExpr op e -> evalUnaryOperation op e
-    AST.BinaryOperatorExpr op lhe rhe -> evalBinaryOperation op lhe rhe
-    AST.GroupingExpr e -> evalExpr e
+evalExpr :: AST.Expr C.Context -> Result
+evalExpr (AST.LiteralExpr c literal) = evalLiteral c literal
+evalExpr (AST.UnaryOperatorExpr c op expr) = evalUnaryOperation c op expr
+evalExpr (AST.BinaryOperatorExpr c op lExpr rExpr) = evalBinaryOperation c op lExpr rExpr
+evalExpr (AST.GroupingExpr _ expr) = evalExpr expr
 
-evalLiteral :: AST.Literal -> Result
-evalLiteral literal = return $ case literal of
+evalLiteral :: C.Context -> AST.Literal -> Result
+evalLiteral _ literal = return $ case literal of
     AST.StringLiteral v -> StringValue v
     AST.BooleanLiteral v -> BooleanValue v
     AST.NumberLiteral v -> NumberValue v
     AST.NilLiteral -> NilValue
 
-evalUnaryOperation :: AST.UnaryOperator -> AST.Expr -> Result
-evalUnaryOperation operator operandExpr = do
-    operandValue <- evalExpr operandExpr
+evalUnaryOperation :: C.Context -> AST.UnaryOperator -> AST.Expr C.Context -> Result
+evalUnaryOperation context operator expr = do
+    operandValue <- evalExpr expr
     case operator of
         AST.UnaryMinus -> case operandValue of
             NumberValue number -> return $ NumberValue (-number)
-            _ -> throwRuntimeError "Unary operator - expected number."
+            _ -> throwRuntimeError "Unary operator (-) expected number." context
         AST.Not -> return $ BooleanValue $ not $ isTruthy operandValue
 
-evalBinaryOperation :: AST.BinaryOperator -> AST.Expr -> AST.Expr -> Result
-evalBinaryOperation operator lhExpr rhExpr = do
+evalBinaryOperation :: C.Context -> AST.BinaryOperator -> AST.Expr C.Context -> AST.Expr C.Context -> Result
+evalBinaryOperation context operator lExpr rExpr = do
     -- NOTE: In book's Java implementation, there is clear order of evaluation:
     --   first left expression is evaluated, then the right one. Author says this is important,
     --   explicit part of implementation that should be part of language specification.
@@ -63,8 +60,8 @@ evalBinaryOperation operator lhExpr rhExpr = do
     --   I wonder, should I use something like deepseq or seq or pseq to ensure the order?
     --   From what I read, pseq should be able to ensure order, but still I am not sure if that is the way.
     --   Does it make any sense to worry about this at all, since there is no IO involved?
-    a <- evalExpr lhExpr
-    b <- evalExpr rhExpr
+    a <- evalExpr lExpr
+    b <- evalExpr rExpr
 
     case operator of
         AST.Minus -> evalArithmeticOperation (-) a b
@@ -74,7 +71,7 @@ evalBinaryOperation operator lhExpr rhExpr = do
         AST.Plus -> case (a, b) of
             (NumberValue na, NumberValue nb) -> return $ NumberValue $ na + nb
             (StringValue sa, StringValue sb) -> return $ StringValue $ sa ++ sb
-            _ -> throwRuntimeError "Operator + expected two numbers or two strings."
+            _ -> throwRuntimeError "Operator + expected two numbers or two strings." context
 
         AST.Greater -> evalComparisonOperation (>) a b
         AST.GreaterEqual -> evalComparisonOperation (>=) a b
@@ -87,12 +84,12 @@ evalBinaryOperation operator lhExpr rhExpr = do
     evalArithmeticOperation :: (Double -> Double -> Double) -> Value -> Value -> Result
     evalArithmeticOperation f a b = case (a, b) of
         (NumberValue na, NumberValue nb) -> return $ NumberValue $ f na nb
-        _ -> throwRuntimeError "Binary arithmetic operator expected two numbers!"
+        _ -> throwRuntimeError "Binary arithmetic operator expected two numbers!" context
 
     evalComparisonOperation :: (Double -> Double -> Bool) -> Value -> Value -> Result
     evalComparisonOperation f a b = case (a, b) of
         (NumberValue na, NumberValue nb) -> return $ BooleanValue $ f na nb
-        _ -> throwRuntimeError "Binary comparison operator expected two numbers!"
+        _ -> throwRuntimeError "Binary comparison operator expected two numbers!" context
 
 isTruthy :: Value -> Bool
 isTruthy (BooleanValue False) = False

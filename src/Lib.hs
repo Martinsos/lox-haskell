@@ -30,6 +30,6 @@ run source = do
     reportParseError (TP.ParseError msg TP.Eof) = reportError "line: EOF" msg
     reportParseError (TP.ParseError msg (TP.LineNumber line)) = reportError ("line: " ++ (show line)) msg
 
-    reportRuntimeError e = reportError "?" (I._errorMsg e)
+    reportRuntimeError e = reportError ("line: " ++ (maybe "?" show (I._errorLine e))) (I._errorMsg e)
 
     reportError position msg = hPutStrLn stderr $ "[" ++ position ++ "] Error: " ++ msg
