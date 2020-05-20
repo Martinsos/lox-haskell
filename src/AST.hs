@@ -1,5 +1,6 @@
 module AST
-  ( Expr(..)
+  ( Stmt(..)
+  , Expr(..)
   , Literal(..)
   , UnaryOperator(..)
   , BinaryOperator(..)
@@ -9,8 +10,12 @@ import Data.List (intercalate)
 
 -- Parameter "c" stands for context -> idea is that you can add context/metadata to any node in the AST.
 -- While it could be anything, normally it will be information about the location in source to
--- which the AST node corresponds, where it was parsed from. Normally parser creates AST, so parser
--- will dictate the type of context.
+-- which the AST node corresponds, where it was parsed from, which is then later used for error reporting.
+-- Normally parser creates AST, so parser will dictate the type of context.
+
+data Stmt c = ExprStmt (Expr c)
+            | PrintStmt c (Expr c)
+
 data Expr c = LiteralExpr c Literal
             | UnaryOperatorExpr c UnaryOperator (Expr c)
             | BinaryOperatorExpr c BinaryOperator (Expr c) (Expr c)

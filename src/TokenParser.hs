@@ -5,6 +5,7 @@ module TokenParser
     , runParser
     , peekToken
     , popToken
+    , handleToken
     , logError
     , logAndThrowError
     ) where
@@ -35,6 +36,13 @@ popToken = do
     setTokens (tail tokens)
     return $ safeHead tokens
 
+handleToken :: (t -> Parser t a) -> (Parser t a) -> Parser t a
+handleToken handle onEnd = do
+    maybeToken <- peekToken
+    case maybeToken of
+        Just t -> handle t
+        Nothing -> onEnd
+
 getTokens :: Parser t [t]
 getTokens = gets _tokens
 
@@ -48,8 +56,8 @@ logAndThrowError :: ParseError -> Parser t a
 logAndThrowError e = logError e >> throwError e
 
 
--- | Runs given parser on provided tokens and returns parsed expression, errors it recovered from and remaining tokens.
--- If there was an error parser could not recover from, Nothing is returned in place of parsed expression.
+-- | Runs given parser on provided tokens and returns what it parsed, errors it recovered from and remaining tokens.
+-- If there was an error parser could not recover from, Nothing is returned in place of parsed stuff.
 runParser :: Parser t a -> [t] -> (Maybe a, [ParseError], [t])
 runParser parser tokens =
     let (resultOrError, parserState) = runState (runExceptT parser) initialParserState
