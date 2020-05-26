@@ -9,7 +9,9 @@ author:              "Martin Sosic"
 maintainer:          "sosic.martin@gmail.com"
 copyright:           "2020 Martin Sosic"
 
-default-extensions: OverloadedStrings
+default-extensions:
+  - OverloadedStrings
+  - BangPatterns
 
 extra-source-files:
   - README.md

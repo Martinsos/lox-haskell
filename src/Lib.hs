@@ -14,13 +14,15 @@ run source = do
     let (scannerErrors, scannedTokens) = S.scanTokens source
     reportScannerErrors scannerErrors
 
-    let (maybeExpr, parseErrors, _) = P.parse scannedTokens
+    let (maybeProgram, parseErrors, _) = P.parse scannedTokens
     reportParseErrors parseErrors
-    case maybeExpr of
+    case maybeProgram of
         Nothing -> putStrLn "Failed to produce the AST."
-        Just expr -> case I.evalExpr expr of
-            Right value -> putStrLn (show value)
-            Left runtimeError -> reportRuntimeError runtimeError
+        Just program -> do
+            programResult <- I.interpret program
+            case programResult of
+                Right () -> return ()
+                Left runtimeError -> reportRuntimeError runtimeError
 
   where
     reportScannerErrors errors = mapM_ reportScannerError errors

@@ -5,9 +5,9 @@ module Parser
 import qualified ScannedToken as ST
 import qualified AST
 import TokenParser (ParseError(..), runParser)
-import Parser.Expr (expression)
+import Parser.Stmt (stmts)
 import Parser.ASTContext (Context)
 
 
-parse :: [ST.ScannedToken] -> (Maybe (AST.Expr Context), [ParseError], [ST.ScannedToken])
-parse = runParser expression
+parse :: [ST.ScannedToken] -> (Maybe [AST.Stmt Context], [ParseError], [ST.ScannedToken])
+parse = runParser stmts
