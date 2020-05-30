@@ -8,10 +8,12 @@ module TokenParser
     , handleToken
     , logError
     , logAndThrowError
+    , catchError
     ) where
 
 import Utils (safeHead)
 import Control.Monad.Except (ExceptT, throwError, runExceptT)
+import qualified Control.Monad.Except as MonadExcept
 import Control.Monad.State.Lazy (State, runState, gets, modify)
 
 
@@ -55,6 +57,8 @@ logError e = modify $ \parserState@(ParserState { _errors = errors }) -> parserS
 logAndThrowError :: ParseError -> Parser t a
 logAndThrowError e = logError e >> throwError e
 
+catchError :: Parser t a -> (ParseError -> Parser t a) -> Parser t a
+catchError = MonadExcept.catchError
 
 -- | Runs given parser on provided tokens and returns what it parsed, errors it recovered from and remaining tokens.
 -- If there was an error parser could not recover from, Nothing is returned in place of parsed stuff.

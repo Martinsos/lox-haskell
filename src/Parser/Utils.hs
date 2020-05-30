@@ -1,29 +1,36 @@
 module Parser.Utils
-    ( expectToken
+    ( ifToken
     , consumeToken
+    , consumeIdentifierToken
     ) where
 
+import Data.Maybe (fromJust)
 import qualified ScannedToken as ST
 import qualified Token as T
 import TokenParser (Parser, ParseError(..), Position(..), handleToken, popToken, logAndThrowError)
 
 
-expectToken
-    :: T.Token
-    -> (ST.ScannedToken -> Parser ST.ScannedToken a)
-    -> (ST.ScannedToken -> Parser ST.ScannedToken a)
-    -> Parser ST.ScannedToken a
-    -> Parser ST.ScannedToken a
-expectToken expectedToken onMatch onMismatch onEnd = handleToken
-    (\st -> if ST._token st == expectedToken
-            then onMatch st
-            else onMismatch st)
-    onEnd
+ifToken :: (T.Token -> Bool)
+        -> (ST.ScannedToken -> Parser ST.ScannedToken a)
+        -> Parser ST.ScannedToken a
+        -> Parser ST.ScannedToken a
+ifToken predicate onTrue onFalse = handleToken
+    (\st -> if predicate (ST._token st) then onTrue st else onFalse)
+    onFalse
 
--- | If next token matches specified token, parses/pops it and returns it.
--- Otherwise, it throws given error message with correct location reported.
-consumeToken :: T.Token -> String -> Parser ST.ScannedToken (Maybe ST.ScannedToken)
-consumeToken token errorMsg = expectToken token
-    (\_ -> popToken)
-    (\st -> logAndThrowError (ParseError errorMsg (LineNumber $ ST._line st)))
+-- | If next token satisfies given predicate, pop it and return it, otherwise report error with correct location.
+consumeToken :: (T.Token -> Bool) -> String -> Parser ST.ScannedToken ST.ScannedToken
+consumeToken predicate errorMsg = handleToken
+    (\st -> if predicate (ST._token st)
+            then popToken >>= return . fromJust
+            else logAndThrowError (ParseError errorMsg (LineNumber $ ST._line st)))
     (logAndThrowError (ParseError errorMsg Eof))
+
+consumeIdentifierToken :: Parser ST.ScannedToken (ST.ScannedToken, T.IdentifierLiteral)
+consumeIdentifierToken = handleToken
+    (\st -> case ST._token st of
+                T.Identifier literal -> popToken >> return (st, literal)
+                _ -> logAndThrowError (ParseError errorMsg (LineNumber $ ST._line st)))
+    (logAndThrowError (ParseError errorMsg Eof))
+  where
+    errorMsg = "Expected identifier."

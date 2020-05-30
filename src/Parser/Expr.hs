@@ -47,7 +47,7 @@ unary = handleToken
             subExpr <- unary
             return $ AST.UnaryOperatorExpr (C.withToken token) operator subExpr
 
--- | NUMBER | STRING | "false" | "true" | "nil" | "(" expression ")"
+-- | NUMBER | STRING | "false" | "true" | "nil" | "(" expression ")" | IDENTIFIER
 primary :: ExprParser
 primary = handleToken
     (\t -> let consumeTokenAsLiteral literal = popToken >> (return $ AST.LiteralExpr (C.withToken t) literal)
@@ -57,9 +57,10 @@ primary = handleToken
                   T.Nil              -> consumeTokenAsLiteral AST.NilLiteral
                   (T.Number _ value) -> consumeTokenAsLiteral $ AST.NumberLiteral value
                   (T.String _ value) -> consumeTokenAsLiteral $ AST.StringLiteral value
+                  (T.Identifier value) -> popToken >> (return $ AST.VariableExpr (C.withToken t) value)
                   T.LeftParen        -> popToken >> do
                       subExpr <- expression
-                      _ <- consumeToken T.RightParen "Expected ')'"
+                      _ <- consumeToken (== T.RightParen) "Expected ')'"
                       return subExpr
                   _ -> logAndThrowError (ParseError "Expected primary expression." (LineNumber $ ST._line t)))
     (logAndThrowError (ParseError "Expected primary expression." Eof))
@@ -86,15 +87,3 @@ makeBinaryOperationParser operators subExprParser = do
                        tryParsingRhe lhe'
                    Nothing -> return lhe)
         (return lhe)
-
--- | Pops tokens until it encounters end of the statement or start of the statement.
-synchronize :: Parser ST.ScannedToken ()
-synchronize = handleToken
-    (\st -> case ST._token st of
-                T.Semicolon         -> popToken >> return ()
-                t | isStartOfStmt t -> return ()
-                _                   -> popToken >> synchronize)
-    (return ())
-  where
-    isStartOfStmt :: T.Token -> Bool
-    isStartOfStmt t = t `elem` [T.Class, T.Fun, T.Var, T.For, T.If, T.While, T.Print, T.Return]

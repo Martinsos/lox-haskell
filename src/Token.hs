@@ -1,5 +1,6 @@
 module Token
   ( Token(..)
+  , IdentifierLiteral
   ) where
 
 

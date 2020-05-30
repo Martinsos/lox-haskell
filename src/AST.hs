@@ -15,11 +15,15 @@ import Data.List (intercalate)
 
 data Stmt c = ExprStmt (Expr c)
             | PrintStmt c (Expr c)
+            | VarStmt c Identifier (Maybe (Expr c))
 
 data Expr c = LiteralExpr c Literal
             | UnaryOperatorExpr c UnaryOperator (Expr c)
             | BinaryOperatorExpr c BinaryOperator (Expr c) (Expr c)
             | GroupingExpr c (Expr c)
+            | VariableExpr c Identifier
+
+type Identifier = String
 
 data Literal = StringLiteral String
              | NumberLiteral Double
@@ -44,6 +48,7 @@ instance Show (Expr c) where
   show (UnaryOperatorExpr _ op e) = parenthesize [show op, show e]
   show (BinaryOperatorExpr _ op lhe rhe) = parenthesize [show op, show lhe, show rhe]
   show (GroupingExpr _ e) = parenthesize ["group", show e]
+  show (VariableExpr _ identifier) = identifier
 
 instance Show Literal where
   show (StringLiteral string) = "\"" ++ string ++ "\""
