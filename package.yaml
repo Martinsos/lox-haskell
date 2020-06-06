@@ -35,6 +35,7 @@ library:
   source-dirs: src
   dependencies:
     - mtl
+    - unordered-containers
 
 executables:
   hlox:
