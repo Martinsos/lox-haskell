@@ -22,6 +22,7 @@ data Expr c = LiteralExpr c Literal
             | BinaryOperatorExpr c BinaryOperator (Expr c) (Expr c)
             | GroupingExpr c (Expr c)
             | VariableExpr c Identifier
+            | AssignExpr c Identifier (Expr c)
 
 type Identifier = String
 
@@ -46,9 +47,10 @@ data BinaryOperator = Equal
 instance Show (Expr c) where
   show (LiteralExpr _ literal) = show literal
   show (UnaryOperatorExpr _ op e) = parenthesize [show op, show e]
-  show (BinaryOperatorExpr _ op lhe rhe) = parenthesize [show op, show lhe, show rhe]
+  show (BinaryOperatorExpr _ op lhe rhe) = parenthesize [show lhe, show op, show rhe]
   show (GroupingExpr _ e) = parenthesize ["group", show e]
   show (VariableExpr _ identifier) = identifier
+  show (AssignExpr _ identifier e) = parenthesize [identifier, "=", show e]
 
 instance Show Literal where
   show (StringLiteral string) = "\"" ++ string ++ "\""

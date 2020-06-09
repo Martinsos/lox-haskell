@@ -19,6 +19,7 @@ evalExpr (AST.UnaryOperatorExpr c op expr) = evalUnaryOperation c op expr
 evalExpr (AST.BinaryOperatorExpr c op lExpr rExpr) = evalBinaryOperation c op lExpr rExpr
 evalExpr (AST.GroupingExpr _ expr) = evalExpr expr
 evalExpr (AST.VariableExpr c name) = getVar c name
+evalExpr (AST.AssignExpr{}) = undefined -- TODO
 
 evalLiteral :: C.Context -> AST.Literal -> Interpreter Value
 evalLiteral _ literal = return $ case literal of

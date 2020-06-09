@@ -4,15 +4,28 @@ module Parser.Expr
 
 import qualified ScannedToken as ST
 import qualified Token as T
-import TokenParser (Parser, ParseError(..), Position(..), popToken, handleToken, logAndThrowError)
+import TokenParser (Parser, popToken, handleToken, logAndThrowError, logError)
 import qualified AST
 import qualified Parser.ASTContext as C
-import Parser.Utils (consumeToken)
+import Parser.Utils (consumeToken, ifToken, errorAtToken, errorAtEof)
 
 type ExprParser = Parser ST.ScannedToken (AST.Expr C.Context)
 
 expression :: ExprParser
-expression = equality
+expression = assignment
+
+assignment :: ExprParser
+assignment = do
+    expr <- equality
+    ifToken
+        (== T.Equal)
+        (\equalToken -> do
+            value <- assignment
+            case expr of
+                AST.VariableExpr _ identifier -> return $ AST.AssignExpr (C.withToken equalToken) identifier value
+                _ -> logError (errorAtToken "Invalid assignment target." equalToken) >> return expr
+        )
+        (return expr)
 
 -- | equality -> comparison ( ("!=" | "==" ) comparison )*
 equality :: ExprParser
@@ -62,8 +75,8 @@ primary = handleToken
                       subExpr <- expression
                       _ <- consumeToken (== T.RightParen) "Expected ')'"
                       return subExpr
-                  _ -> logAndThrowError (ParseError "Expected primary expression." (LineNumber $ ST._line t)))
-    (logAndThrowError (ParseError "Expected primary expression." Eof))
+                  _ -> logAndThrowError (errorAtToken "Expected primary expression." t))
+    (logAndThrowError (errorAtEof "Expected primary expression."))
 
 -- | Given a sub expression and a list of operators, creates parser for
 -- following grammar production: <subExpr> ( ( <op1> | ... | <opN> ) <subExpr> )*

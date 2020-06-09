@@ -2,6 +2,8 @@ module Parser.Utils
     ( ifToken
     , consumeToken
     , consumeIdentifierToken
+    , errorAtToken
+    , errorAtEof
     ) where
 
 import Data.Maybe (fromJust)
@@ -23,14 +25,19 @@ consumeToken :: (T.Token -> Bool) -> String -> Parser ST.ScannedToken ST.Scanned
 consumeToken predicate errorMsg = handleToken
     (\st -> if predicate (ST._token st)
             then popToken >>= return . fromJust
-            else logAndThrowError (ParseError errorMsg (LineNumber $ ST._line st)))
-    (logAndThrowError (ParseError errorMsg Eof))
+            else logAndThrowError (errorAtToken errorMsg st))
+    (logAndThrowError (errorAtEof errorMsg))
 
 consumeIdentifierToken :: Parser ST.ScannedToken (ST.ScannedToken, T.IdentifierLiteral)
 consumeIdentifierToken = handleToken
     (\st -> case ST._token st of
                 T.Identifier literal -> popToken >> return (st, literal)
-                _ -> logAndThrowError (ParseError errorMsg (LineNumber $ ST._line st)))
-    (logAndThrowError (ParseError errorMsg Eof))
-  where
-    errorMsg = "Expected identifier."
+                _ -> logAndThrowError (errorAtToken errorMsg st))
+    (logAndThrowError (errorAtEof errorMsg))
+  where errorMsg = "Expected identifier."
+
+errorAtToken :: String -> ST.ScannedToken -> ParseError
+errorAtToken msg st = ParseError msg (LineNumber $ ST._line st)
+
+errorAtEof :: String -> ParseError
+errorAtEof msg = ParseError msg Eof
