@@ -6,7 +6,7 @@ import qualified AST
 import qualified Parser.ASTContext as C
 import Control.Monad.IO.Class (liftIO)
 import Interpreter.Value (Value(..), isTruthy)
-import Interpreter.Core (Interpreter, runInterpreter, RuntimeError(..), throwRuntimeError, defineVar, getVar)
+import Interpreter.Core (Interpreter, runInterpreter, RuntimeError(..), throwRuntimeError, getVar, setVar)
 
 type Program = [AST.Stmt C.Context]
 
@@ -19,7 +19,7 @@ evalExpr (AST.UnaryOperatorExpr c op expr) = evalUnaryOperation c op expr
 evalExpr (AST.BinaryOperatorExpr c op lExpr rExpr) = evalBinaryOperation c op lExpr rExpr
 evalExpr (AST.GroupingExpr _ expr) = evalExpr expr
 evalExpr (AST.VariableExpr c name) = getVar c name
-evalExpr (AST.AssignExpr{}) = undefined -- TODO
+evalExpr (AST.AssignExpr c name expr) = evalAssignExpr c name expr
 
 evalLiteral :: C.Context -> AST.Literal -> Interpreter Value
 evalLiteral _ literal = return $ case literal of
@@ -70,6 +70,13 @@ evalBinaryOperation context operator lExpr rExpr = do
         (NumberValue na, NumberValue nb) -> return $ BooleanValue $ f na nb
         _ -> throwRuntimeError context "Binary comparison operator expected two numbers!"
 
+evalAssignExpr :: C.Context -> String -> AST.Expr C.Context -> Interpreter Value
+evalAssignExpr context name expr = do
+    _ <- getVar context name
+    value <- evalExpr expr
+    _ <- setVar name value
+    return value
+
 evalStmt :: AST.Stmt C.Context -> Interpreter ()
 evalStmt (AST.ExprStmt e) = evalExpr e >> return ()
 evalStmt (AST.PrintStmt c e) = evalPrintStmt c e
@@ -83,4 +90,4 @@ evalPrintStmt _ expr = do
 evalVarStmt :: C.Context -> String -> Maybe (AST.Expr C.Context) -> Interpreter ()
 evalVarStmt _ name maybeInitializer = do
     value <- maybe (return NilValue) evalExpr maybeInitializer
-    defineVar name value
+    setVar name value

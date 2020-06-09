@@ -4,8 +4,8 @@ module Interpreter.Core
     , runInterpreter
     , RuntimeError(..)
     , throwRuntimeError
-    , defineVar
     , getVar
+    , setVar
     ) where
 
 import Control.Monad.IO.Class (MonadIO)
@@ -38,8 +38,8 @@ data InterpreterState = InterpreterState
     { _environment :: E.Environment
     }
 
-defineVar :: String -> Value -> Interpreter ()
-defineVar name value =
+setVar :: String -> Value -> Interpreter ()
+setVar name value =
     modify (\s -> s { _environment = E.setVar (_environment s) name value })
 
 getVar :: C.Context -> String -> Interpreter Value

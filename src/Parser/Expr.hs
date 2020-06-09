@@ -20,6 +20,7 @@ assignment = do
     ifToken
         (== T.Equal)
         (\equalToken -> do
+            _ <- popToken
             value <- assignment
             case expr of
                 AST.VariableExpr _ identifier -> return $ AST.AssignExpr (C.withToken equalToken) identifier value
