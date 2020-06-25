@@ -6,6 +6,7 @@ module Interpreter.Core
     , throwRuntimeError
     , getVar
     , setVar
+    , assignVar
     ) where
 
 import Control.Monad.IO.Class (MonadIO)
@@ -37,6 +38,13 @@ throwRuntimeError context msg = throwError $ RuntimeError { _errorMsg = msg, _er
 data InterpreterState = InterpreterState
     { _environment :: E.Environment
     }
+
+assignVar :: C.Context -> String -> Value -> Interpreter ()
+assignVar context name value = do
+    env <- gets _environment
+    case E.assignVar env name value of
+        Just env' -> modify (\s -> s { _environment = env' })
+        Nothing -> throwRuntimeError context ("Undefined variable '" ++ name ++ "'.")
 
 setVar :: String -> Value -> Interpreter ()
 setVar name value =

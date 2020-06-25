@@ -6,7 +6,7 @@ import qualified AST
 import qualified Parser.ASTContext as C
 import Control.Monad.IO.Class (liftIO)
 import Interpreter.Value (Value(..), isTruthy)
-import Interpreter.Core (Interpreter, runInterpreter, RuntimeError(..), throwRuntimeError, getVar, setVar)
+import Interpreter.Core (Interpreter, runInterpreter, RuntimeError(..), throwRuntimeError, getVar, setVar, assignVar)
 
 type Program = [AST.Stmt C.Context]
 
@@ -72,9 +72,8 @@ evalBinaryOperation context operator lExpr rExpr = do
 
 evalAssignExpr :: C.Context -> String -> AST.Expr C.Context -> Interpreter Value
 evalAssignExpr context name expr = do
-    _ <- getVar context name
     value <- evalExpr expr
-    _ <- setVar name value
+    assignVar context name value
     return value
 
 evalStmt :: AST.Stmt C.Context -> Interpreter ()
