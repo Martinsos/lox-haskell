@@ -16,6 +16,7 @@ import Data.List (intercalate)
 data Stmt c = ExprStmt (Expr c)
             | PrintStmt c (Expr c)
             | VarStmt c Identifier (Maybe (Expr c))
+            | BlockStmt c [Stmt c]
 
 data Expr c = LiteralExpr c Literal
             | UnaryOperatorExpr c UnaryOperator (Expr c)

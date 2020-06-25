@@ -45,7 +45,12 @@ varDeclaration = do
     return $ AST.VarStmt (C.withToken varToken) identifierLiteral maybeInitializerExpr
 
 stmt :: StmtParser
-stmt = ifToken (== T.Print) (const printStmt) exprStmt
+stmt = handleToken
+    (\st -> case ST._token st of
+        T.Print     -> printStmt
+        T.LeftBrace -> blockStmt
+        _ -> exprStmt)
+    exprStmt
 
 printStmt :: StmtParser
 printStmt = do
@@ -60,13 +65,27 @@ exprStmt = do
     _ <- consumeToken (== T.Semicolon) "Expected ';' at the end of expression statement."
     return $ AST.ExprStmt expr
 
+blockStmt :: StmtParser
+blockStmt = do
+    leftBraceToken <- consumeToken (== T.LeftBrace) "Expected '{'."
+    dcls <- restOfBlockStmt
+    return $ AST.BlockStmt (C.withToken leftBraceToken) dcls
+  where
+    restOfBlockStmt = ifToken
+        (/= T.RightBrace)
+        (const $ do
+            maybeDcl <- declaration
+            dcls <- restOfBlockStmt
+            return $ maybe dcls (:dcls) maybeDcl)
+        (consumeToken (== T.RightBrace) "Expected '}' after block." >> return [])
+
 -- | Pops tokens until it encounters end of the statement or start of the statement.
 synchronize :: Parser ST.ScannedToken ()
 synchronize = handleToken
     (\st -> case ST._token st of
-                T.Semicolon         -> popToken >> return ()
-                t | isStartOfStmt t -> return ()
-                _                   -> popToken >> synchronize)
+        T.Semicolon         -> popToken >> return ()
+        t | isStartOfStmt t -> return ()
+        _                   -> popToken >> synchronize)
     (return ())
   where
     isStartOfStmt :: T.Token -> Bool

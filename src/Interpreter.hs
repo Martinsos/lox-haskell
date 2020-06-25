@@ -6,12 +6,13 @@ import qualified AST
 import qualified Parser.ASTContext as C
 import Control.Monad.IO.Class (liftIO)
 import Interpreter.Value (Value(..), isTruthy)
-import Interpreter.Core (Interpreter, runInterpreter, RuntimeError(..), throwRuntimeError, getVar, setVar, assignVar)
+import Interpreter.Core (Interpreter, runInterpreter, RuntimeError(..), throwRuntimeError, getVar, setVar,
+                         assignVar, evalScoped)
 
 type Program = [AST.Stmt C.Context]
 
 interpret :: Program -> IO (Either RuntimeError ())
-interpret stmts = runInterpreter $ mapM_ evalStmt stmts
+interpret stmts = runInterpreter $ evalStmts stmts
 
 evalExpr :: AST.Expr C.Context -> Interpreter Value
 evalExpr (AST.LiteralExpr c literal) = evalLiteral c literal
@@ -80,6 +81,10 @@ evalStmt :: AST.Stmt C.Context -> Interpreter ()
 evalStmt (AST.ExprStmt e) = evalExpr e >> return ()
 evalStmt (AST.PrintStmt c e) = evalPrintStmt c e
 evalStmt (AST.VarStmt c name initializer) = evalVarStmt c name initializer
+evalStmt (AST.BlockStmt c stmts) = evalBlockStmt c stmts
+
+evalStmts :: [AST.Stmt C.Context] -> Interpreter ()
+evalStmts stmts = mapM_ evalStmt stmts
 
 evalPrintStmt :: C.Context -> AST.Expr C.Context -> Interpreter ()
 evalPrintStmt _ expr = do
@@ -90,3 +95,6 @@ evalVarStmt :: C.Context -> String -> Maybe (AST.Expr C.Context) -> Interpreter 
 evalVarStmt _ name maybeInitializer = do
     value <- maybe (return NilValue) evalExpr maybeInitializer
     setVar name value
+
+evalBlockStmt :: C.Context -> [AST.Stmt C.Context] -> Interpreter ()
+evalBlockStmt _ stmts = evalScoped $ evalStmts stmts
