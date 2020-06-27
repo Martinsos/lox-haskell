@@ -39,7 +39,7 @@ varDeclaration = do
     varToken <- consumeToken (== T.Var) "Expected 'var' at start of a variable declaration."
     (_, identifierLiteral) <- consumeIdentifierToken
     maybeInitializerExpr <- ifToken (== T.Equal)
-                                    (\_ -> popToken >> Just <$> PE.expression)
+                                    (const $ popToken >> Just <$> PE.expression)
                                     (return Nothing)
     _ <- consumeToken (== T.Semicolon) "Expected ';' after variable declaration."
     return $ AST.VarStmt (C.withToken varToken) identifierLiteral maybeInitializerExpr
@@ -49,6 +49,7 @@ stmt = handleToken
     (\st -> case ST._token st of
         T.Print     -> printStmt
         T.LeftBrace -> blockStmt
+        T.If        -> ifStmt
         _ -> exprStmt)
     exprStmt
 
@@ -67,7 +68,7 @@ exprStmt = do
 
 blockStmt :: StmtParser
 blockStmt = do
-    leftBraceToken <- consumeToken (== T.LeftBrace) "Expected '{'."
+    leftBraceToken <- consumeToken (== T.LeftBrace) "Expected '{' at the start of block."
     dcls <- restOfBlockStmt
     return $ AST.BlockStmt (C.withToken leftBraceToken) dcls
   where
@@ -78,6 +79,17 @@ blockStmt = do
             dcls <- restOfBlockStmt
             return $ maybe dcls (:dcls) maybeDcl)
         (consumeToken (== T.RightBrace) "Expected '}' after block." >> return [])
+
+ifStmt :: StmtParser
+ifStmt = do
+    startingToken <- consumeToken (== T.If) "Expected 'if' at the start of if statement."
+    _ <- consumeToken (== T.LeftParen) "Expected '(' after 'if'."
+    condition <- PE.expression
+    _ <- consumeToken (== T.RightParen) "Expected ')' after if condition."
+    thenBranch <- stmt
+    maybeElseBranch <- ifToken (== T.Else) (const $ popToken >> Just <$> stmt) (return Nothing)
+    return $ AST.IfStmt (C.withToken startingToken) condition thenBranch maybeElseBranch
+
 
 -- | Pops tokens until it encounters end of the statement or start of the statement.
 synchronize :: Parser ST.ScannedToken ()

@@ -15,15 +15,16 @@ import Data.List (intercalate)
 
 data Stmt c = ExprStmt (Expr c)
             | PrintStmt c (Expr c)
-            | VarStmt c Identifier (Maybe (Expr c))
+            | VarStmt c Identifier (Maybe (Expr c)) -- ^ variable name, maybe initializer.
             | BlockStmt c [Stmt c]
+            | IfStmt c (Expr c) (Stmt c) (Maybe (Stmt c))  -- ^ condition, thenBranch, maybe elseBranch.
 
 data Expr c = LiteralExpr c Literal
             | UnaryOperatorExpr c UnaryOperator (Expr c)
             | BinaryOperatorExpr c BinaryOperator (Expr c) (Expr c)
             | GroupingExpr c (Expr c)
-            | VariableExpr c Identifier
-            | AssignExpr c Identifier (Expr c)
+            | VariableExpr c Identifier -- ^ variable name.
+            | AssignExpr c Identifier (Expr c) -- ^ variable name, expression to assign.
 
 type Identifier = String
 
