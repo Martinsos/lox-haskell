@@ -38,38 +38,56 @@ evalUnaryOperation context operator expr = do
             _ -> throwRuntimeError context "Unary operator (-) expected number."
         AST.Not -> return $ BooleanValue $ not $ isTruthy operandValue
 
-evalBinaryOperation :: C.Context -> AST.BinaryOperator -> AST.Expr C.Context -> AST.Expr C.Context -> Interpreter Value
+evalBinaryOperation :: C.Context -> AST.BinaryOperator -> AST.Expr C.Context
+                    -> AST.Expr C.Context -> Interpreter Value
 evalBinaryOperation context operator lExpr rExpr = do
-    a <- evalExpr lExpr
-    b <- evalExpr rExpr
-
     case operator of
-        AST.Minus -> evalArithmeticOperation (-) a b
-        AST.Slash -> evalArithmeticOperation (/) a b
-        AST.Star -> evalArithmeticOperation (*) a b
+        AST.Minus -> evalArithmeticOperation (-)
+        AST.Slash -> evalArithmeticOperation (/)
+        AST.Star -> evalArithmeticOperation (*)
 
-        AST.Plus -> case (a, b) of
-            (NumberValue na, NumberValue nb) -> return $ NumberValue $ na + nb
-            (StringValue sa, StringValue sb) -> return $ StringValue $ sa ++ sb
-            _ -> throwRuntimeError context "Operator + expected two numbers or two strings."
+        AST.Plus -> evalPlus
 
-        AST.Greater -> evalComparisonOperation (>) a b
-        AST.GreaterEqual -> evalComparisonOperation (>=) a b
-        AST.Less -> evalComparisonOperation (<) a b
-        AST.LessEqual -> evalComparisonOperation (<=) a b
+        AST.Greater -> evalComparisonOperation (>)
+        AST.GreaterEqual -> evalComparisonOperation (>=)
+        AST.Less -> evalComparisonOperation (<)
+        AST.LessEqual -> evalComparisonOperation (<=)
 
-        AST.Equal -> return $ BooleanValue $ a == b
-        AST.NotEqual -> return $ BooleanValue $ a /= b
+        AST.Equal -> evalLeftAndRight >>= \(a, b) -> return $ BooleanValue $ a == b
+        AST.NotEqual -> evalLeftAndRight >>= \(a, b) -> return $ BooleanValue $ a /= b
+
+        AST.And -> evalLeft >>= \a ->
+            if not (isTruthy a) then return a else evalRight
+        AST.Or -> evalLeft >>= \a ->
+            if isTruthy a then return a else evalRight
   where
-    evalArithmeticOperation :: (Double -> Double -> Double) -> Value -> Value -> Interpreter Value
-    evalArithmeticOperation f a b = case (a, b) of
+    evalArithmeticOperation :: (Double -> Double -> Double) -> Interpreter Value
+    evalArithmeticOperation f = evalLeftAndRight >>= \(a, b) -> case (a, b) of
         (NumberValue na, NumberValue nb) -> return $ NumberValue $ f na nb
         _ -> throwRuntimeError context "Binary arithmetic operator expected two numbers!"
 
-    evalComparisonOperation :: (Double -> Double -> Bool) -> Value -> Value -> Interpreter Value
-    evalComparisonOperation f a b = case (a, b) of
+    evalComparisonOperation :: (Double -> Double -> Bool) -> Interpreter Value
+    evalComparisonOperation f = evalLeftAndRight >>= \(a, b) -> case (a, b) of
         (NumberValue na, NumberValue nb) -> return $ BooleanValue $ f na nb
         _ -> throwRuntimeError context "Binary comparison operator expected two numbers!"
+
+    evalPlus :: Interpreter Value
+    evalPlus = evalLeftAndRight >>= \(a, b) -> case (a, b) of
+        (NumberValue na, NumberValue nb) -> return $ NumberValue $ na + nb
+        (StringValue sa, StringValue sb) -> return $ StringValue $ sa ++ sb
+        _ -> throwRuntimeError context "Operator + expected two numbers or two strings."
+
+    evalLeftAndRight :: Interpreter (Value, Value)
+    evalLeftAndRight = do
+        a <- evalLeft
+        b <- evalRight
+        return (a, b)
+
+    evalLeft :: Interpreter Value
+    evalLeft = evalExpr lExpr
+
+    evalRight :: Interpreter Value
+    evalRight = evalExpr rExpr
 
 evalAssignExpr :: C.Context -> String -> AST.Expr C.Context -> Interpreter Value
 evalAssignExpr context name expr = do

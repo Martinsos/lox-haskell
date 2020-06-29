@@ -16,7 +16,7 @@ expression = assignment
 
 assignment :: ExprParser
 assignment = do
-    expr <- equality
+    expr <- logicalOr
     ifToken
         (== T.Equal)
         (\equalToken -> do
@@ -27,6 +27,12 @@ assignment = do
                 _ -> logError (errorAtToken "Invalid assignment target." equalToken) >> return expr
         )
         (return expr)
+
+logicalOr :: ExprParser
+logicalOr = makeBinaryOperationParser [(T.Or, AST.Or)] logicalAnd
+
+logicalAnd :: ExprParser
+logicalAnd = makeBinaryOperationParser [(T.And, AST.And)] equality
 
 -- | equality -> comparison ( ("!=" | "==" ) comparison )*
 equality :: ExprParser

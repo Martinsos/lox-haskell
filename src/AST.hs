@@ -45,36 +45,40 @@ data BinaryOperator = Equal
                     | Minus
                     | Star
                     | Slash
+                    | Or
+                    | And
 
 instance Show (Expr c) where
-  show (LiteralExpr _ literal) = show literal
-  show (UnaryOperatorExpr _ op e) = parenthesize [show op, show e]
-  show (BinaryOperatorExpr _ op lhe rhe) = parenthesize [show lhe, show op, show rhe]
-  show (GroupingExpr _ e) = parenthesize ["group", show e]
-  show (VariableExpr _ identifier) = identifier
-  show (AssignExpr _ identifier e) = parenthesize [identifier, "=", show e]
+    show (LiteralExpr _ literal) = show literal
+    show (UnaryOperatorExpr _ op e) = parenthesize [show op, show e]
+    show (BinaryOperatorExpr _ op lhe rhe) = parenthesize [show lhe, show op, show rhe]
+    show (GroupingExpr _ e) = parenthesize ["group", show e]
+    show (VariableExpr _ identifier) = identifier
+    show (AssignExpr _ identifier e) = parenthesize [identifier, "=", show e]
 
 instance Show Literal where
-  show (StringLiteral string) = "\"" ++ string ++ "\""
-  show (NumberLiteral number) = show number
-  show (BooleanLiteral boolean) = if boolean then "true" else "false"
-  show NilLiteral = "nil"
+    show (StringLiteral string) = "\"" ++ string ++ "\""
+    show (NumberLiteral number) = show number
+    show (BooleanLiteral boolean) = if boolean then "true" else "false"
+    show NilLiteral = "nil"
 
 instance Show UnaryOperator where
-  show UnaryMinus = "-"
-  show Not = "!"
+    show UnaryMinus = "-"
+    show Not = "!"
 
 instance Show BinaryOperator where
-  show Equal = "=="
-  show NotEqual = "!="
-  show Less = "<"
-  show LessEqual = "<="
-  show Greater = ">"
-  show GreaterEqual = ">="
-  show Plus = "+"
-  show Minus = "-"
-  show Star = "*"
-  show Slash = "/"
+    show Equal = "=="
+    show NotEqual = "!="
+    show Less = "<"
+    show LessEqual = "<="
+    show Greater = ">"
+    show GreaterEqual = ">="
+    show Plus = "+"
+    show Minus = "-"
+    show Star = "*"
+    show Slash = "/"
+    show Or = "or"
+    show And = "and"
 
 parenthesize :: [String] -> String
 parenthesize xs = "(" ++ (intercalate " " xs) ++ ")"
