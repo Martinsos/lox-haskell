@@ -10,7 +10,7 @@ data Value = StringValue !String
     deriving (Eq)
 
 instance Show Value where
-    show (StringValue v) = "\"" ++ v ++ "\""
+    show (StringValue v) = v
     show (BooleanValue v) = if v then "true" else "false"
     show (NumberValue v) = show v
     show NilValue = "nil"

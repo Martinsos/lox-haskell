@@ -8,11 +8,11 @@ import qualified Lib
 
 main :: IO ()
 main = do
-  args <- getArgs
-  case length args of
-    0 -> runPrompt
-    1 -> runFile (head args)
-    _ -> printUsage >> exitWith exitCodeUsage
+    args <- getArgs
+    case length args of
+        0 -> runPrompt
+        1 -> runFile (head args)
+        _ -> printUsage >> exitWith exitCodeUsage
 
 exitCodeUsage :: ExitCode
 exitCodeUsage = ExitFailure 64 -- As defined in sysexits.h of FreeBSD documentation.
@@ -22,9 +22,9 @@ printUsage = putStrLn "Usage: hlox [script]"
 
 runPrompt :: IO ()
 runPrompt = forever $ do
-  hSetBuffering stdout NoBuffering
-  putStr "> "
-  getLine >>= Lib.run
+    hSetBuffering stdout NoBuffering
+    putStr "> "
+    getLine >>= Lib.run
 
 runFile :: FilePath -> IO ()
 runFile path = readFile path >>= Lib.run

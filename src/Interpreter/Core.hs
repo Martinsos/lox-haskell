@@ -47,14 +47,14 @@ data InterpreterState = InterpreterState
 assignVar :: C.Context -> String -> Value -> Interpreter ()
 assignVar context name value = do
     env <- gets _environment
-    case E.assignVar env name value of
+    case env `E.assignVar` (name, value) of
         Just env' -> setEnv env'
         Nothing -> throwRuntimeError context ("Undefined variable '" ++ name ++ "'.")
 
 setVar :: String -> Value -> Interpreter ()
 setVar name value = do
     env <- gets _environment
-    let env' = E.setVar env name value
+    let env' = env `E.setVar` (name, value)
     setEnv env'
 
 getVar :: C.Context -> String -> Interpreter Value
