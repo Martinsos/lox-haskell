@@ -96,7 +96,7 @@ evalAssignExpr context name expr = do
     return value
 
 evalStmts :: [AST.Stmt C.Context] -> Interpreter ()
-evalStmts stmts = mapM_ evalStmt stmts
+evalStmts = mapM_ evalStmt
 
 evalStmt :: AST.Stmt C.Context -> Interpreter ()
 evalStmt (AST.ExprStmt e) = evalExpr e >> return ()
@@ -104,11 +104,12 @@ evalStmt (AST.PrintStmt c e) = evalPrintStmt c e
 evalStmt (AST.VarStmt c name initializer) = evalVarStmt c name initializer
 evalStmt (AST.BlockStmt c stmts) = evalBlockStmt c stmts
 evalStmt (AST.IfStmt c condition thenBranch elseBranch) = evalIfStmt c condition thenBranch elseBranch
+evalStmt (AST.WhileStmt c condition body) = evalWhileStmt c condition body
 
 evalPrintStmt :: C.Context -> AST.Expr C.Context -> Interpreter ()
 evalPrintStmt _ expr = do
     value <- evalExpr expr
-    liftIO $ putStrLn $ show value
+    liftIO $ print value
 
 evalVarStmt :: C.Context -> String -> Maybe (AST.Expr C.Context) -> Interpreter ()
 evalVarStmt _ name maybeInitializer = do
@@ -118,9 +119,17 @@ evalVarStmt _ name maybeInitializer = do
 evalBlockStmt :: C.Context -> [AST.Stmt C.Context] -> Interpreter ()
 evalBlockStmt _ stmts = evalScoped $ evalStmts stmts
 
-evalIfStmt :: C.Context -> (AST.Expr C.Context) -> (AST.Stmt C.Context) -> (Maybe (AST.Stmt C.Context)) -> Interpreter ()
+evalIfStmt :: C.Context -> AST.Expr C.Context -> AST.Stmt C.Context -> Maybe (AST.Stmt C.Context) -> Interpreter ()
 evalIfStmt _ condition thenBranch maybeElseBranch = do
     conditionValue <- evalExpr condition
     if isTruthy conditionValue
         then evalStmt thenBranch
         else maybe (return ()) evalStmt maybeElseBranch
+
+evalWhileStmt :: C.Context -> AST.Expr C.Context -> AST.Stmt C.Context -> Interpreter ()
+evalWhileStmt context condition body = do
+    conditionValue <- evalExpr condition
+    if isTruthy conditionValue
+        then do evalStmt body
+                evalWhileStmt context condition body
+        else return ()

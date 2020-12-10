@@ -10,14 +10,18 @@ module Interpreter.Core
     , evalScoped
     ) where
 
-import Control.Monad.IO.Class (MonadIO)
-import Control.Monad.Except (MonadError, ExceptT, runExceptT)
-import Control.Monad.State.Lazy (MonadState, StateT, gets, modify, runStateT)
-import Control.Monad.Except (throwError, catchError)
-import qualified Parser.ASTContext as C
-import qualified ScannedToken as ST
-import qualified Interpreter.Environment as E
-import Interpreter.Value (Value)
+import           Control.Monad.Except     (ExceptT, MonadError, catchError,
+                                           runExceptT, throwError)
+import           Control.Monad.IO.Class   (MonadIO)
+import           Control.Monad.State.Lazy (MonadState, StateT, gets, modify,
+                                           runStateT)
+import           Data.Maybe               (fromJust)
+
+import qualified Interpreter.Environment  as E
+import           Interpreter.Value        (Value)
+import qualified Parser.ASTContext        as C
+import qualified ScannedToken             as ST
+
 
 newtype Interpreter a = Interpreter {
   _runInterpreter :: ExceptT RuntimeError (StateT InterpreterState IO) a
@@ -34,7 +38,7 @@ data RuntimeError = RuntimeError { _errorMsg :: String, _errorLine :: Maybe Int 
 
 throwRuntimeError :: C.Context -> String -> Interpreter a
 throwRuntimeError context msg = throwError $ RuntimeError { _errorMsg = msg, _errorLine = line }
-  where line = C._token context >>= return . ST._line
+  where line = ST._line <$> C._token context
 
 data InterpreterState = InterpreterState
     { _environment :: E.Environment
@@ -64,12 +68,13 @@ getVar context name = do
 -- Scope is closed once evaluation is done, even in case of exception.
 evalScoped :: Interpreter a -> Interpreter a
 evalScoped toEval = do
-    oldEnv <- gets _environment
-    let newEnv = E.enclosed oldEnv
-    setEnv newEnv
-    result <- toEval `catchError` (\e -> setEnv oldEnv >> throwError e)
-    setEnv oldEnv
+    openNewClosure
+    result <- toEval `catchError` (\e -> closeNewestClosure >> throwError e)
+    closeNewestClosure
     return result
+  where
+    openNewClosure = gets _environment >>= setEnv . E.enclosed
+    closeNewestClosure = gets _environment >>= setEnv . fromJust . E.getEnclosingEnv
 
 setEnv :: E.Environment -> Interpreter ()
 setEnv env = modify (\s -> s { _environment = env })

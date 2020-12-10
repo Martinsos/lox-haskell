@@ -18,6 +18,7 @@ data Stmt c = ExprStmt (Expr c)
             | VarStmt c Identifier (Maybe (Expr c)) -- ^ variable name, maybe initializer.
             | BlockStmt c [Stmt c]
             | IfStmt c (Expr c) (Stmt c) (Maybe (Stmt c))  -- ^ condition, thenBranch, maybe elseBranch.
+            | WhileStmt c (Expr c) (Stmt c) -- ^ condition, body.
 
 data Expr c = LiteralExpr c Literal
             | UnaryOperatorExpr c UnaryOperator (Expr c)

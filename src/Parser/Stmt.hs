@@ -50,6 +50,7 @@ stmt = handleToken
         T.Print     -> printStmt
         T.LeftBrace -> blockStmt
         T.If        -> ifStmt
+        T.While     -> whileStmt
         _ -> exprStmt)
     exprStmt
 
@@ -89,6 +90,15 @@ ifStmt = do
     thenBranch <- stmt
     maybeElseBranch <- ifToken (== T.Else) (const $ popToken >> Just <$> stmt) (return Nothing)
     return $ AST.IfStmt (C.withToken startingToken) condition thenBranch maybeElseBranch
+
+whileStmt :: StmtParser
+whileStmt = do
+    startingToken <- consumeToken (== T.While) "Expected 'while' at the start of while statement."
+    _ <- consumeToken (== T.LeftParen) "Expected '(' after 'while'."
+    condition <- PE.expression
+    _ <- consumeToken (== T.RightParen) "Expected ')' after while condition."
+    body <- stmt
+    return $ AST.WhileStmt (C.withToken startingToken) condition body
 
 
 -- | Pops tokens until it encounters end of the statement or start of the statement.
