@@ -2,7 +2,6 @@ module Main where
 
 import System.Exit (exitWith, ExitCode(..))
 import System.IO (hSetBuffering, stdout, BufferMode(..))
-import Control.Monad (forever)
 import System.Environment (getArgs)
 import qualified Lib
 
@@ -21,10 +20,18 @@ printUsage :: IO ()
 printUsage = putStrLn "Usage: hlox [script]"
 
 runPrompt :: IO ()
-runPrompt = forever $ do
+runPrompt = do
     hSetBuffering stdout NoBuffering
-    putStr "> "
-    getLine >>= Lib.run
+    repl Lib.initState
+  where
+    repl state = do
+        putStr "> "
+        source <- getLine
+        state' <- Lib.interpret state source
+        repl state'
 
 runFile :: FilePath -> IO ()
-runFile path = readFile path >>= Lib.run
+runFile path = do
+    source <- readFile path
+    _ <- Lib.interpret Lib.initState source
+    return ()

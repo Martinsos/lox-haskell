@@ -1,18 +1,21 @@
 module Interpreter
     ( interpret
-    , RuntimeError(..) ) where
+    , InterpreterState
+    , initState
+    , RuntimeError(..)
+    ) where
 
 import qualified AST
 import qualified Parser.ASTContext as C
 import Control.Monad.IO.Class (liftIO)
 import Interpreter.Value (Value(..), isTruthy)
 import Interpreter.Core (Interpreter, runInterpreter, RuntimeError(..), throwRuntimeError, getVar, setVar,
-                         assignVar, evalScoped)
+                         assignVar, evalScoped, InterpreterState, initState)
 
 type Program = [AST.Stmt C.Context]
 
-interpret :: Program -> IO (Either RuntimeError ())
-interpret stmts = runInterpreter $ evalStmts stmts
+interpret :: InterpreterState -> Program -> IO (Either RuntimeError (), InterpreterState)
+interpret state stmts = runInterpreter state $ evalStmts stmts
 
 evalExpr :: AST.Expr C.Context -> Interpreter Value
 evalExpr (AST.LiteralExpr c literal) = evalLiteral c literal

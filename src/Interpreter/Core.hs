@@ -2,6 +2,8 @@
 module Interpreter.Core
     ( Interpreter
     , runInterpreter
+    , initState
+    , InterpreterState
     , RuntimeError(..)
     , throwRuntimeError
     , getVar
@@ -27,12 +29,12 @@ newtype Interpreter a = Interpreter {
   _runInterpreter :: ExceptT RuntimeError (StateT InterpreterState IO) a
 } deriving (Functor, Applicative, Monad, MonadIO, MonadState InterpreterState, MonadError RuntimeError)
 
-runInterpreter :: Interpreter a -> IO (Either RuntimeError a)
-runInterpreter interpreter = do
-    (resultOrError, _state) <- runStateT (runExceptT $ _runInterpreter interpreter) initialState
-    return resultOrError
-  where
-    initialState = InterpreterState { _environment = E.empty }
+runInterpreter :: InterpreterState -> Interpreter a -> IO (Either RuntimeError a, InterpreterState)
+runInterpreter state interpreter =
+    runStateT (runExceptT $ _runInterpreter interpreter) state
+
+initState :: InterpreterState
+initState = InterpreterState { _environment = E.empty }
 
 data RuntimeError = RuntimeError { _errorMsg :: String, _errorLine :: Maybe Int }
 
