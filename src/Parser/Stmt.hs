@@ -2,13 +2,17 @@ module Parser.Stmt
     ( stmts
     ) where
 
-import qualified ScannedToken as ST
-import qualified Token as T
-import TokenParser (Parser, popToken, handleToken, catchError)
+import           Data.Maybe        (fromMaybe)
+
 import qualified AST
 import qualified Parser.ASTContext as C
-import qualified Parser.Expr as PE
-import Parser.Utils (ifToken, consumeToken, consumeIdentifierToken)
+import qualified Parser.Expr       as PE
+import           Parser.Utils      (consumeIdentifierToken, consumeToken,
+                                    errorAtEof, ifToken)
+import qualified ScannedToken      as ST
+import qualified Token             as T
+import           TokenParser       (Parser, catchError, handleToken,
+                                    logAndThrowError, popToken)
 
 type StmtParser  = Parser ST.ScannedToken (AST.Stmt C.Context)
 type StmtsParser = Parser ST.ScannedToken [AST.Stmt C.Context]
@@ -30,7 +34,7 @@ stmts = handleToken
 -- | If error occurs, synchronization happens and no statement is returned.
 -- If there is no error, statement is returned.
 declaration :: Parser ST.ScannedToken (Maybe (AST.Stmt C.Context))
-declaration = (Just <$> (ifToken (== T.Var) (const varDeclaration) stmt))
+declaration = (Just <$> ifToken (== T.Var) (const varDeclaration) stmt)
               `catchError` (\_ -> synchronize >> return Nothing)
 
 -- | Parses variable declaration, otherwise throws parser error.
@@ -51,7 +55,8 @@ stmt = handleToken
         T.LeftBrace -> blockStmt
         T.If        -> ifStmt
         T.While     -> whileStmt
-        _ -> exprStmt)
+        T.For       -> forStmt
+        _           -> exprStmt)
     exprStmt
 
 printStmt :: StmtParser
@@ -99,6 +104,55 @@ whileStmt = do
     _ <- consumeToken (== T.RightParen) "Expected ')' after while condition."
     body <- stmt
     return $ AST.WhileStmt (C.withToken startingToken) condition body
+
+forStmt :: StmtParser
+forStmt = do
+    startingToken <- consumeToken (== T.For) "Expected 'for' at the start of for statement."
+    _ <- consumeToken (== T.LeftParen) "Expected '(' after 'for'."
+    maybeInitializerStmt <- parseInitializer
+    maybeConditionExpr <- parseCondition
+    maybeIncrementExpr <- parseIncrement
+    body <- stmt
+
+    return $ sugarizeWhileIntoForLoop
+        (C.withToken startingToken)
+        maybeInitializerStmt
+        maybeConditionExpr
+        maybeIncrementExpr
+        body
+  where
+      parseInitializer = handleToken
+          (\st -> case ST._token st of
+              T.Semicolon -> popToken >> return Nothing
+              T.Var       -> Just <$> varDeclaration
+              _           -> Just <$> exprStmt)
+          (logAndThrowError $ errorAtEof "Expected 'for' loop initializer.")
+
+      parseCondition = parseOptionalExpression "condition" (T.Semicolon, ";")
+
+      parseIncrement = parseOptionalExpression "increment" (T.RightParen, ")")
+
+      parseOptionalExpression exprName (endToken, endTokenStr) = handleToken
+          (\st -> if ST._token st == endToken
+              then popToken >> return Nothing
+              else do
+                  expr <- PE.expression
+                  _ <- consumeToken (== endToken)
+                                    ("Expected '" ++ endTokenStr ++ "' at the end of the 'for' loop "
+                                     ++ exprName ++ " expression.")
+                  return (Just expr))
+          (logAndThrowError $ errorAtEof $ "Expected 'for' loop " ++ exprName ++ ".")
+
+      sugarizeWhileIntoForLoop context mInitStmt mCondExpr mIncrExpr body = forLoop
+        where
+          forLoop = case mInitStmt of
+              Nothing       -> whileLoop
+              Just initStmt -> AST.BlockStmt context [initStmt, whileLoop]
+          whileLoop = AST.WhileStmt context whileCondition whileBody
+          whileCondition = fromMaybe (AST.LiteralExpr context $ AST.BooleanLiteral True) mCondExpr
+          whileBody = case mIncrExpr of
+              Nothing       -> body
+              Just incrExpr -> AST.BlockStmt context [body, AST.ExprStmt incrExpr]
 
 
 -- | Pops tokens until it encounters end of the statement or start of the statement.
